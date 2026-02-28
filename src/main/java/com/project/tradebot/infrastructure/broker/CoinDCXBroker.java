@@ -147,7 +147,6 @@ public class CoinDCXBroker implements Broker {
             for (Order order : orders) {
                 int precision = marketPrecisions.getOrDefault(order.getSymbol(), 8);
                 
-                // Round quantity based on precision
                 BigDecimal qty = BigDecimal.valueOf(order.getQuantity())
                         .setScale(precision, RoundingMode.HALF_DOWN)
                         .stripTrailingZeros();
@@ -156,7 +155,7 @@ public class CoinDCXBroker implements Broker {
                 oMap.put("side", order.getType().toString().toLowerCase());
                 oMap.put("order_type", "market_order");
                 oMap.put("market", order.getSymbol());
-                oMap.put("total_quantity", qty); // BigDecimal is serialized as a Number in JSON
+                oMap.put("total_quantity", qty);
                 oMap.put("timestamp", timestamp);
                 oMap.put("ecode", "I");
                 oMap.put("client_order_id", UUID.randomUUID().toString().replace("-", ""));
