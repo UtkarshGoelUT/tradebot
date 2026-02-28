@@ -1,5 +1,7 @@
 package com.project.tradebot.infrastructure.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.project.tradebot.application.ports.Broker;
 import com.project.tradebot.application.ports.MarketData;
 import com.project.tradebot.application.ports.NewsSource;
@@ -19,6 +21,15 @@ public class TradingConfig {
     @Bean
     public WebClient.Builder webClientBuilder() {
         return WebClient.builder();
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.findAndRegisterModules();
+        // Crucial: This prevents scientific notation like 1E+2 in JSON numbers
+        mapper.enable(SerializationFeature.WRITE_BIGDECIMAL_AS_PLAIN);
+        return mapper;
     }
 
     @Bean

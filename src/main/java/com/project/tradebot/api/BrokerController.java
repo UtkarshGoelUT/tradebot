@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/broker")
 @RequiredArgsConstructor
@@ -23,10 +25,18 @@ public class BrokerController {
     }
 
     @PostMapping("/order")
-    @Operation(summary = "Place an order via a broker")
+    @Operation(summary = "Place a single order via a broker")
     public Order placeOrder(
             @RequestParam(defaultValue = "CoinDCXBroker") String brokerName,
             @RequestBody Order order) {
         return brokerService.placeOrder(brokerName, order);
+    }
+
+    @PostMapping("/orders")
+    @Operation(summary = "Place multiple orders in a batch via a broker")
+    public List<Order> placeOrders(
+            @RequestParam(defaultValue = "CoinDCXBroker") String brokerName,
+            @RequestBody List<Order> orders) {
+        return brokerService.placeOrders(brokerName, orders);
     }
 }

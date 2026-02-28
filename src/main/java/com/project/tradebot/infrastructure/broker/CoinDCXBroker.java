@@ -24,6 +24,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,19 +45,18 @@ public class CoinDCXBroker implements Broker {
     private final String orderPath;
     private final String marketDetailsUrl;
     
-    // Cache for market precisions: Market Symbol -> Target Currency Precision
     private final Map<String, Integer> marketPrecisions = new ConcurrentHashMap<>();
 
     public CoinDCXBroker(
-            WebClient.Builder webClientBuilder,
+            WebClient.Builder webClientBuilder, 
             ObjectMapper objectMapper,
             @Value("${coindcx.api.key:}") String apiKey,
             @Value("${coindcx.api.secret:}") String apiSecret,
             @Value("${coindcx.api.base-url:https://api.coindcx.com}") String baseUrl,
             @Value("${coindcx.api.portfolio-path:/exchange/v1/users/balances}") String portfolioPath,
-            @Value("${coindcx.api.order-path:/exchange/v1/orders/create}") String orderPath,
-            @Value("${coindcx.api.market-details-url:/exchange/v1/markets_details}") String marketDetailsUrl) {
-
+            @Value("${coindcx.api.order-path:/exchange/v1/orders/create_multiple}") String orderPath,
+            @Value("${coindcx.api.market-details-url:/exchange/v1/market_details}") String marketDetailsUrl) {
+        
         this.webClient = webClientBuilder.baseUrl(baseUrl).build();
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
@@ -68,8 +68,6 @@ public class CoinDCXBroker implements Broker {
 
     private void loadMarketDetails() {
         if (!marketPrecisions.isEmpty()) return;
-
-        log.info("Fetching market details for precision from CoinDCX...");
         try {
             List<CoinDCXMarketDetail> details = webClient.get()
                     .uri(marketDetailsUrl)
@@ -77,14 +75,13 @@ public class CoinDCXBroker implements Broker {
                     .bodyToFlux(CoinDCXMarketDetail.class)
                     .collectList()
                     .block();
-
+            
             if (details != null) {
                 details.forEach(d -> {
                     if (d.getSymbol() != null) {
                         marketPrecisions.put(d.getSymbol(), d.getTargetCurrencyPrecision());
                     }
                 });
-                log.info("Loaded precision details for {} markets", marketPrecisions.size());
             }
         } catch (Exception e) {
             log.error("Failed to load CoinDCX market details: {}", e.getMessage());
@@ -94,7 +91,6 @@ public class CoinDCXBroker implements Broker {
     @Override
     public Portfolio getPortfolio() {
         if (isMissingCredentials()) return getMockPortfolio();
-
         try {
             long timestamp = System.currentTimeMillis();
             Map<String, Object> body = new LinkedHashMap<>();
@@ -118,56 +114,62 @@ public class CoinDCXBroker implements Broker {
                 Map<String, Double> balanceMap = balances.stream()
                         .filter(b -> b.getBalance() > 0)
                         .collect(Collectors.toMap(CoinDCXBalance::getCurrency, CoinDCXBalance::getBalance));
-
-                return Portfolio.builder()
-                        .balances(balanceMap)
-                        .totalValueInUsd(0.0)
-                        .build();
+                return Portfolio.builder().balances(balanceMap).totalValueInUsd(0.0).build();
             }
         } catch (Exception e) {
             log.error("Error fetching CoinDCX portfolio: {}", e.getMessage());
         }
-
         return getMockPortfolio();
     }
 
     @Override
     public Order placeOrder(Order order) {
+        List<Order> result = placeOrders(List.of(order));
+        return result.isEmpty() ? order : result.get(0);
+    }
+
+    @Override
+    public List<Order> placeOrders(List<Order> orders) {
         if (isMissingCredentials()) {
-            log.warn("CoinDCX credentials missing. Mocking order execution.");
-            order.setStatus(Order.OrderStatus.EXECUTED);
-            order.setOrderId("MOCK-" + System.currentTimeMillis());
-            return order;
+            log.warn("Credentials missing. Mocking batch orders.");
+            orders.forEach(o -> {
+                o.setStatus(Order.OrderStatus.EXECUTED);
+                o.setOrderId("MOCK-" + UUID.randomUUID());
+            });
+            return orders;
         }
 
-        // Ensure market details are loaded
         loadMarketDetails();
+        long timestamp = System.currentTimeMillis();
 
         try {
-            long timestamp = System.currentTimeMillis() / 1000;
-            String clientOrderId = UUID.randomUUID().toString();
-            String market = order.getSymbol();
+            List<Map<String, Object>> orderList = new ArrayList<>();
+            for (Order order : orders) {
+                int precision = marketPrecisions.getOrDefault(order.getSymbol(), 8);
+                
+                // Round quantity based on precision
+                BigDecimal qty = BigDecimal.valueOf(order.getQuantity())
+                        .setScale(precision, RoundingMode.HALF_DOWN)
+                        .stripTrailingZeros();
 
-            // Get precision for this specific market
-            int precision = marketPrecisions.getOrDefault(market, 8); // fallback to 8
-            log.debug("Using precision {} for market {}", precision, market);
-
-            // Round quantity precisely based on market requirements
-            BigDecimal qty = BigDecimal.valueOf(order.getQuantity())
-                    .setScale(precision, RoundingMode.HALF_DOWN);
+                Map<String, Object> oMap = new LinkedHashMap<>();
+                oMap.put("side", order.getType().toString().toLowerCase());
+                oMap.put("order_type", "market_order");
+                oMap.put("market", order.getSymbol());
+                oMap.put("total_quantity", qty); // BigDecimal is serialized as a Number in JSON
+                oMap.put("timestamp", timestamp);
+                oMap.put("ecode", "I");
+                oMap.put("client_order_id", UUID.randomUUID().toString().replace("-", ""));
+                orderList.add(oMap);
+            }
 
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("side", order.getType().toString().toLowerCase());
-            body.put("order_type", "market_order");
-            body.put("market", market);
-            body.put("total_quantity", qty);
-            body.put("timestamp", timestamp);
-            body.put("client_order_id", clientOrderId);
+            body.put("orders", orderList);
 
             String jsonBody = objectMapper.writeValueAsString(body);
             String signature = generateSignature(jsonBody);
 
-            log.info("CoinDCX Order Payload for {}: {}", market, jsonBody);
+            log.info("CoinDCX Batch Order Payload: {}", jsonBody);
 
             String rawResponse = webClient.post()
                     .uri(orderPath)
@@ -176,10 +178,10 @@ public class CoinDCXBroker implements Broker {
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(jsonBody)
                     .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, resp ->
+                    .onStatus(HttpStatusCode::is4xxClientError, resp -> 
                         resp.bodyToMono(String.class).flatMap(errorBody -> {
-                            log.error("CoinDCX API Error (400): {}", errorBody);
-                            return Mono.error(new RuntimeException("CoinDCX Error: " + errorBody));
+                            log.error("CoinDCX Batch Order Error (400): {}", errorBody);
+                            return Mono.error(new RuntimeException(errorBody));
                         })
                     )
                     .bodyToMono(String.class)
@@ -187,20 +189,20 @@ public class CoinDCXBroker implements Broker {
 
             CoinDCXOrderListResponse response = objectMapper.readValue(rawResponse, CoinDCXOrderListResponse.class);
 
-            if (response != null && response.getOrders() != null && !response.getOrders().isEmpty()) {
-                CoinDCXOrderInfo info = response.getOrders().get(0);
-                order.setOrderId(info.getId());
-                order.setStatus(Order.OrderStatus.EXECUTED);
-                log.info("Successfully placed market_order on CoinDCX: {} (Client ID: {})", info.getId(), clientOrderId);
-            } else {
-                order.setStatus(Order.OrderStatus.FAILED);
+            if (response != null && response.getOrders() != null) {
+                for (int i = 0; i < Math.min(orders.size(), response.getOrders().size()); i++) {
+                    CoinDCXOrderInfo info = response.getOrders().get(i);
+                    orders.get(i).setOrderId(info.getId());
+                    orders.get(i).setStatus(Order.OrderStatus.EXECUTED);
+                }
+                log.info("Successfully executed {}/{} batch orders", response.getOrders().size(), orders.size());
             }
         } catch (Exception e) {
-            log.error("Error placing CoinDCX order: {}", e.getMessage());
-            order.setStatus(Order.OrderStatus.FAILED);
+            log.error("Error executing batch orders: {}", e.getMessage());
+            orders.forEach(o -> o.setStatus(Order.OrderStatus.FAILED));
         }
 
-        return order;
+        return orders;
     }
 
     @Override
@@ -222,7 +224,6 @@ public class CoinDCXBroker implements Broker {
         SecretKeySpec secretKeySpec = new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         hmacSha256.init(secretKeySpec);
         byte[] hash = hmacSha256.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-
         StringBuilder hexString = new StringBuilder();
         for (byte b : hash) {
             String hex = Integer.toHexString(0xff & b);
@@ -233,16 +234,13 @@ public class CoinDCXBroker implements Broker {
     }
 
     private Portfolio getMockPortfolio() {
-        log.debug("Returning mock portfolio for CoinDCX");
         Map<String, Double> balances = new HashMap<>();
         balances.put("BTC", 0.0);
         balances.put("INR", 10000.0);
         return Portfolio.builder().balances(balances).totalValueInUsd(120.0).build();
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class CoinDCXBalance {
         private String currency;
         private double balance;
@@ -250,16 +248,12 @@ public class CoinDCXBroker implements Broker {
         private double lockedBalance;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class CoinDCXOrderListResponse {
         private List<CoinDCXOrderInfo> orders;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class CoinDCXOrderInfo {
         private String id;
         @JsonProperty("client_order_id")
@@ -268,9 +262,7 @@ public class CoinDCXBroker implements Broker {
         private String market;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class CoinDCXMarketDetail {
         @JsonProperty("symbol")
         private String symbol;

@@ -69,8 +69,14 @@ public class TradingService {
         List<TradeSignal> signals = strategy.generateSignals(context);
         log.info("Generated {} trade signals", signals.size());
 
-        // 6. Execute Trades Judiciously
-        return processSignals(signals, marketPrices, broker, portfolio);
+        // 6. Execute Trades Judiciously via Batch API
+        List<Order> ordersToExecute = prepareOrders(signals, marketPrices, portfolio);
+        if (ordersToExecute.isEmpty()) {
+            log.info("No trades met the criteria for execution.");
+            return new ArrayList<>();
+        }
+
+        return broker.placeOrders(ordersToExecute);
     }
 
     private Set<String> identifyRelevantSymbols(Portfolio portfolio, List<News> news) {
@@ -80,10 +86,8 @@ public class TradingService {
                 symbols.add(s + "INR");
             }
         });
-        
         symbols.add("BTCINR");
         symbols.add("ETHINR");
-        
         news.forEach(n -> {
             String title = n.getTitle().toUpperCase();
             if (title.contains("BTC") || title.contains("BITCOIN")) symbols.add("BTCINR");
@@ -93,71 +97,40 @@ public class TradingService {
         return symbols;
     }
 
-    private List<Order> processSignals(List<TradeSignal> signals, Map<String, Double> prices, Broker broker, Portfolio portfolio) {
+    private List<Order> prepareOrders(List<TradeSignal> signals, Map<String, Double> prices, Portfolio portfolio) {
         List<Order> orders = new ArrayList<>();
         double currentInrBalance = portfolio.getBalances().getOrDefault("INR", 0.0);
 
         for (TradeSignal signal : signals) {
-            if (signal.getConfidence() < minConfidenceThreshold) {
-                log.info("Skipping signal for {} due to low confidence: {}", signal.getSymbol(), signal.getConfidence());
-                continue;
-            }
+            if (signal.getConfidence() < minConfidenceThreshold) continue;
 
             String exchangeSymbol = signal.getSymbol().endsWith("INR") ? signal.getSymbol() : signal.getSymbol() + "INR";
             Double price = prices.get(exchangeSymbol);
 
-            if (price == null || price <= 0) {
-                log.warn("Invalid price for {}. Skipping.", exchangeSymbol);
-                continue;
-            }
+            if (price == null || price <= 0) continue;
 
             if (signal.getType() == TradeSignal.SignalType.BUY) {
-                // Calculate judicious quantity:
-                // Spend more if confidence is high, but never more than maxAllocationPerTradeInr
-                double targetSpend = maxAllocationPerTradeInr * signal.getConfidence();
-                
-                // Ensure we don't exceed available INR
-                targetSpend = Math.min(targetSpend, currentInrBalance * 0.95); // leave 5% for fees/buffer
+                double targetSpend = Math.min(maxAllocationPerTradeInr * signal.getConfidence(), currentInrBalance * 0.95);
+                if (targetSpend < 100) continue;
 
-                if (targetSpend < 100) { // minimum trade size check
-                    log.warn("Target spend {} INR too low for {}. Skipping.", targetSpend, exchangeSymbol);
-                    continue;
-                }
-
-                double quantity = targetSpend / price;
-                
-                Order order = Order.builder()
+                orders.add(Order.builder()
                         .symbol(exchangeSymbol)
                         .type(Order.OrderType.BUY)
-                        .quantity(quantity)
+                        .quantity(targetSpend / price)
                         .price(price)
-                        .build();
-
-                log.info("BUY: Spending {} INR (Confidence: {}) to get {} units of {} at price {}",
-                        targetSpend, signal.getConfidence(), quantity, exchangeSymbol, price);
-                
-                orders.add(broker.placeOrder(order));
-                currentInrBalance -= targetSpend; // subtract from local tracker for this run
+                        .build());
+                currentInrBalance -= targetSpend;
 
             } else if (signal.getType() == TradeSignal.SignalType.SELL) {
                 String baseAsset = exchangeSymbol.replace("INR", "");
                 double availableAsset = portfolio.getBalances().getOrDefault(baseAsset, 0.0);
-
                 if (availableAsset > 0) {
-                    // Sell a portion of the asset based on confidence
-                    double quantityToSell = availableAsset * signal.getConfidence();
-                    
-                    Order order = Order.builder()
+                    orders.add(Order.builder()
                             .symbol(exchangeSymbol)
                             .type(Order.OrderType.SELL)
-                            .quantity(quantityToSell)
+                            .quantity(availableAsset * signal.getConfidence())
                             .price(price)
-                            .build();
-
-                    log.info("SELL: Selling {} units of {} (Confidence: {}) at price {} for a total of {}",
-                            quantityToSell, exchangeSymbol, signal.getConfidence(), price, price * quantityToSell);
-                    
-                    orders.add(broker.placeOrder(order));
+                            .build());
                 }
             }
         }

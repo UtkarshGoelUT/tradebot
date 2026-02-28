@@ -6,6 +6,7 @@ import com.project.tradebot.domain.model.Portfolio;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -23,5 +24,11 @@ public class BrokerService {
         Broker broker = brokers.get(brokerName);
         if (broker == null) throw new IllegalArgumentException("Broker not found");
         return broker.placeOrder(order);
+    }
+
+    public List<Order> placeOrders(String brokerName, List<Order> orders) {
+        Broker broker = brokers.get(brokerName);
+        if (broker == null) throw new IllegalArgumentException("Broker not found");
+        return broker.placeOrders(orders);
     }
 }

@@ -27,15 +27,15 @@ coindcx:
     secret: ${COINDCX_API_SECRET:}
     base-url: https://api.coindcx.com
     portfolio-path: /exchange/v1/users/balances
-    order-path: /exchange/v1/orders/create
+    order-path: /exchange/v1/orders/create_multiple # Switched to multiple endpoint
     ticker-url: /exchange/ticker
     market-details-url: /exchange/v1/markets_details
 
 # Risk Management & Strategy Configuration
 trading:
-  total-managed-capital-inr: 50000.0  # Total budget for the bot
-  max-allocation-per-trade-inr: 5000.0 # Max amount (INR) to spend on a single trade
-  min-confidence-threshold: 0.7       # Don't trade if confidence is lower than this
+  total-managed-capital-inr: 50000.0
+  max-allocation-per-trade-inr: 5000.0
+  min-confidence-threshold: 0.7
 
 # Swagger UI Configuration
 springdoc:
