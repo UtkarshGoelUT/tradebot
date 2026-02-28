@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: tradebot
+  main:
+    allow-bean-definition-overriding: true
+
+# Ollama Configuration
+ollama:
+  model: mistral
+  url: http://localhost:11434/api/generate
+
+# Google LLM Configuration
+google:
+  llm:
+    model: gemini-3-flash-preview
+    api-key: ${GOOGLE_API_KEY:}
+
+# News Configuration
+news:
+  api:
+    url: https://min-api.cryptocompare.com/data/v2/news/?lang=EN
+
+# CoinDCX Configuration
+coindcx:
+  api:
+    key: ${COINDCX_API_KEY:}
+    secret: ${COINDCX_API_SECRET:}
+    base-url: https://api.coindcx.com
+    portfolio-path: /exchange/v1/users/balances
+    order-path: /exchange/v1/orders/create
+    ticker-url: /exchange/ticker
+    market-details-url: /exchange/v1/markets_details
+
+# Risk Management & Strategy Configuration
+trading:
+  total-managed-capital-inr: 50000.0  # Total budget for the bot
+  max-allocation-per-trade-inr: 5000.0 # Max amount (INR) to spend on a single trade
+  min-confidence-threshold: 0.7       # Don't trade if confidence is lower than this
+
+# Swagger UI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+logging:
+  level:
+    com.project.tradebot: DEBUG
