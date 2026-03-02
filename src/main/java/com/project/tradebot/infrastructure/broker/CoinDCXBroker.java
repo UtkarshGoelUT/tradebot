@@ -168,7 +168,7 @@ public class CoinDCXBroker implements Broker {
             String jsonBody = objectMapper.writeValueAsString(body);
             String signature = generateSignature(jsonBody);
 
-            log.info("CoinDCX Batch Order Payload: {}", jsonBody);
+            log.debug("CoinDCX Batch Order Payload: {}", jsonBody);
 
             String rawResponse = webClient.post()
                     .uri(orderPath)
@@ -179,7 +179,7 @@ public class CoinDCXBroker implements Broker {
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, resp -> 
                         resp.bodyToMono(String.class).flatMap(errorBody -> {
-                            log.error("CoinDCX Batch Order Error (400): {}", errorBody);
+                            log.debug("CoinDCX Batch Order Error (400): {}", errorBody);
                             return Mono.error(new RuntimeException(errorBody));
                         })
                     )
