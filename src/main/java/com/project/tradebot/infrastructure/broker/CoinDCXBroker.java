@@ -223,13 +223,7 @@ public class CoinDCXBroker implements Broker {
         SecretKeySpec secretKeySpec = new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         hmacSha256.init(secretKeySpec);
         byte[] hash = hmacSha256.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : hash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
-        }
-        return hexString.toString();
+        return java.util.HexFormat.of().formatHex(hash);
     }
 
     private Portfolio getMockPortfolio() {
