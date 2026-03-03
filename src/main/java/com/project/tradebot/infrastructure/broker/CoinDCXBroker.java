@@ -25,6 +25,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,8 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class CoinDCXBroker implements Broker {
+
+    private static final HexFormat HEX_FORMATTER = HexFormat.of();
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -222,7 +225,7 @@ public class CoinDCXBroker implements Broker {
         SecretKeySpec secretKeySpec = new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         hmacSha256.init(secretKeySpec);
         byte[] hash = hmacSha256.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-        return java.util.HexFormat.of().formatHex(hash);
+        return HEX_FORMATTER.formatHex(hash);
     }
 
     private Portfolio getMockPortfolio() {
