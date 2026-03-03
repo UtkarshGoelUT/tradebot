@@ -154,7 +154,7 @@ public class CoinDCXBroker implements Broker {
                 oMap.put("side", order.getType().toString().toLowerCase());
                 oMap.put("order_type", "market_order");
                 oMap.put("market", order.getSymbol());
-                oMap.put("total_quantity", qty);
+                oMap.put("total_quantity", qty.doubleValue());
                 oMap.put("timestamp", timestamp);
                 oMap.put("ecode", "I");
                 oMap.put("client_order_id", UUID.randomUUID().toString().replace("-", ""));
@@ -162,6 +162,7 @@ public class CoinDCXBroker implements Broker {
             }
 
             Map<String, Object> body = new LinkedHashMap<>();
+            body.put("timestamp", timestamp);
             body.put("orders", orderList);
 
             String jsonBody = objectMapper.writeValueAsString(body);

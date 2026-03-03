@@ -1,0 +1,44 @@
+const https = require('https');
+const crypto = require('crypto');
+
+// Generate random credentials to see if we still get 401 or 422
+const key = 'fakekey';
+const secret = 'fakesecret';
+
+const data = JSON.stringify({
+  orders: [{
+    side: "buy",
+    order_type: "market_order",
+    market: "DOGEINR",
+    total_quantity: 100,
+    timestamp: Date.now(),
+    ecode: "I",
+    client_order_id: "b04ea3df9612464d869ed2ea262ea402"
+  }]
+});
+
+const signature = crypto.createHmac('sha256', secret).update(data).digest('hex');
+
+const options = {
+  hostname: 'api.coindcx.com',
+  port: 443,
+  path: '/exchange/v1/orders/create_multiple',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-AUTH-APIKEY': key,
+    'X-AUTH-SIGNATURE': signature,
+    'Content-Length': data.length
+  }
+};
+
+const req = https.request(options, res => {
+  console.log(`statusCode: ${res.statusCode}`);
+  let out = '';
+  res.on('data', d => { out += d; });
+  res.on('end', () => { console.log(out); });
+});
+
+req.on('error', error => { console.error(error); });
+req.write(data);
+req.end();
