@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.Mac;
@@ -82,8 +84,12 @@ public class CoinDCXBroker implements Broker {
                     }
                 });
             }
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            log.error("Failed to load CoinDCX market details. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
             log.error("Failed to load CoinDCX market details: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error loading CoinDCX market details: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
         }
     }
 
@@ -115,8 +121,12 @@ public class CoinDCXBroker implements Broker {
                         .collect(Collectors.toMap(CoinDCXBalance::getCurrency, CoinDCXBalance::getBalance));
                 return Portfolio.builder().balances(balanceMap).totalValueInUsd(0.0).build();
             }
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            log.error("Error fetching CoinDCX portfolio. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
             log.error("Error fetching CoinDCX portfolio: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error fetching CoinDCX portfolio: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
         }
         return getMockPortfolio();
     }
@@ -195,8 +205,14 @@ public class CoinDCXBroker implements Broker {
                 }
                 log.info("Successfully executed {}/{} batch orders", response.getOrders().size(), orders.size());
             }
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            log.error("Error executing batch orders. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            orders.forEach(o -> o.setStatus(Order.OrderStatus.FAILED));
+        } catch (WebClientException e) {
             log.error("Error executing batch orders: {}", e.getMessage());
+            orders.forEach(o -> o.setStatus(Order.OrderStatus.FAILED));
+        } catch (Exception e) {
+            log.error("Unexpected error executing batch orders: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
             orders.forEach(o -> o.setStatus(Order.OrderStatus.FAILED));
         }
 

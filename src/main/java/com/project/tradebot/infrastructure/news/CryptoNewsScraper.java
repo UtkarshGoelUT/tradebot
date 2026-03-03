@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -46,8 +48,12 @@ public class CryptoNewsScraper implements NewsSource {
                         .map(this::mapToDomain)
                         .collect(Collectors.toList());
             }
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            log.error("Error fetching news from CryptoCompare. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
             log.error("Error fetching news from CryptoCompare: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error fetching news from CryptoCompare: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         return new ArrayList<>();
