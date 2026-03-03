@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,8 +64,12 @@ public class OllamaStrategy implements TradingStrategy {
                 log.debug("Ollama Response: {}", responseText);
                 return parseSignals(responseText);
             }
+        } catch (WebClientResponseException e) {
+            log.error("Error calling Ollama API. Status: {}, Body: {}. Falling back to demo logic.", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
+            log.error("Error calling Ollama API: {}. Falling back to demo logic.", e.getMessage());
         } catch (Exception e) {
-            log.error("Error calling Ollama API: {}. Falling back to demo strategy logic.", e.getMessage());
+            log.error("Unexpected error calling Ollama API: {}. Message: {}. Falling back to demo logic.", e.getClass().getSimpleName(), e.getMessage());
         }
 
         // Fallback to demo logic if Ollama is unavailable

@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,8 +69,12 @@ public class GoogleLLMStrategy implements TradingStrategy {
                 log.debug("Google LLM Response: {}", responseText);
                 return parseSignals(responseText);
             }
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            log.error("Error calling Google LLM API. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
             log.error("Error calling Google LLM API: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error calling Google LLM API: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         return new ArrayList<>();
