@@ -174,8 +174,6 @@ public class CoinDCXBroker implements Broker {
             String jsonBody = objectMapper.writeValueAsString(body);
             String signature = generateSignature(jsonBody);
 
-            log.debug("CoinDCX Batch Order Payload: {}", jsonBody);
-
             String rawResponse = webClient.post()
                     .uri(spotBaseUrl + orderPath)
                     .header("X-AUTH-APIKEY", apiKey)
