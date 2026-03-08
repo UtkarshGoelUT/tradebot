@@ -1,5 +1,6 @@
 package com.project.tradebot.infrastructure.market;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.project.tradebot.application.ports.MarketData;
 import lombok.AllArgsConstructor;
@@ -25,7 +26,7 @@ public class CoinDCXMarketData implements MarketData {
 
     public CoinDCXMarketData(
             WebClient.Builder webClientBuilder,
-            @Value("${coindcx.api.base-url:https://api.coindcx.com}") String baseUrl,
+            @Value("${coindcx.api.spot-base-url:https://apigw.coindcx.com}") String baseUrl,
             @Value("${coindcx.api.ticker-url:/exchange/ticker}") String tickerUrl) {
         this.webClient = webClientBuilder.baseUrl(baseUrl).build();
         this.tickerUrl = tickerUrl;
@@ -84,6 +85,7 @@ public class CoinDCXMarketData implements MarketData {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CoinDCXTicker {
         private String market;
         @JsonProperty("last_price")

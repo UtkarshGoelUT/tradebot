@@ -26,6 +26,7 @@ coindcx:
     key: ${COINDCX_API_KEY:}
     secret: ${COINDCX_API_SECRET:}
     base-url: https://api.coindcx.com
+    spot-base-url: https://apigw.coindcx.com
     portfolio-path: /exchange/v1/users/balances
     order-path: /exchange/v1/orders/create_multiple # Switched to multiple endpoint
     ticker-url: /exchange/ticker

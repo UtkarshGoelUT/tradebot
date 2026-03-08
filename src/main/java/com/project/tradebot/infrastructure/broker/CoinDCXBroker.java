@@ -1,5 +1,6 @@
 package com.project.tradebot.infrastructure.broker;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.tradebot.application.ports.Broker;
@@ -40,6 +41,8 @@ public class CoinDCXBroker implements Broker {
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String apiSecret;
+    private final String generalBaseUrl;
+    private final String spotBaseUrl;
     private final String portfolioPath;
     private final String orderPath;
     private final String marketDetailsUrl;
@@ -51,15 +54,18 @@ public class CoinDCXBroker implements Broker {
             ObjectMapper objectMapper,
             @Value("${coindcx.api.key:}") String apiKey,
             @Value("${coindcx.api.secret:}") String apiSecret,
-            @Value("${coindcx.api.base-url:https://api.coindcx.com}") String baseUrl,
+            @Value("${coindcx.api.base-url:https://api.coindcx.com}") String generalBaseUrl,
+            @Value("${coindcx.api.spot-base-url:https://apigw.coindcx.com}") String spotBaseUrl,
             @Value("${coindcx.api.portfolio-path:/exchange/v1/users/balances}") String portfolioPath,
             @Value("${coindcx.api.order-path:/exchange/v1/orders/create_multiple}") String orderPath,
-            @Value("${coindcx.api.market-details-url:/exchange/v1/market_details}") String marketDetailsUrl) {
+            @Value("${coindcx.api.market-details-url:/exchange/v1/markets_details}") String marketDetailsUrl) {
         
-        this.webClient = webClientBuilder.baseUrl(baseUrl).build();
+        this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
-        this.apiKey = apiKey;
-        this.apiSecret = apiSecret;
+        this.apiKey = apiKey != null ? apiKey.trim() : "";
+        this.apiSecret = apiSecret != null ? apiSecret.trim() : "";
+        this.generalBaseUrl = generalBaseUrl;
+        this.spotBaseUrl = spotBaseUrl;
         this.portfolioPath = portfolioPath;
         this.orderPath = orderPath;
         this.marketDetailsUrl = marketDetailsUrl;
@@ -69,13 +75,12 @@ public class CoinDCXBroker implements Broker {
         if (!marketPrecisions.isEmpty()) return;
         try {
             List<CoinDCXMarketDetail> details = webClient.get()
-                    .uri(marketDetailsUrl)
+                    .uri(spotBaseUrl + marketDetailsUrl)
                     .retrieve()
                     .bodyToFlux(CoinDCXMarketDetail.class)
                     .collectList()
                     .block();
-            
-            if (details != null) {
+                if (details != null) {
                 details.forEach(d -> {
                     if (d.getSymbol() != null) {
                         marketPrecisions.put(d.getSymbol(), d.getTargetCurrencyPrecision());
@@ -99,7 +104,7 @@ public class CoinDCXBroker implements Broker {
             String signature = generateSignature(jsonBody);
 
             List<CoinDCXBalance> balances = webClient.post()
-                    .uri(portfolioPath)
+                    .uri(generalBaseUrl + portfolioPath)
                     .header("X-AUTH-APIKEY", apiKey)
                     .header("X-AUTH-SIGNATURE", signature)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -154,7 +159,7 @@ public class CoinDCXBroker implements Broker {
                 oMap.put("side", order.getType().toString().toLowerCase());
                 oMap.put("order_type", "market_order");
                 oMap.put("market", order.getSymbol());
-                oMap.put("total_quantity", qty);
+                oMap.put("total_quantity", qty.toPlainString());
                 oMap.put("timestamp", timestamp);
                 oMap.put("ecode", "I");
                 oMap.put("client_order_id", UUID.randomUUID().toString().replace("-", ""));
@@ -162,7 +167,9 @@ public class CoinDCXBroker implements Broker {
             }
 
             Map<String, Object> body = new LinkedHashMap<>();
+            body.put("timestamp", timestamp);
             body.put("orders", orderList);
+            body.put("ecode", "I");
 
             String jsonBody = objectMapper.writeValueAsString(body);
             String signature = generateSignature(jsonBody);
@@ -170,7 +177,7 @@ public class CoinDCXBroker implements Broker {
             log.debug("CoinDCX Batch Order Payload: {}", jsonBody);
 
             String rawResponse = webClient.post()
-                    .uri(orderPath)
+                    .uri(spotBaseUrl + orderPath)
                     .header("X-AUTH-APIKEY", apiKey)
                     .header("X-AUTH-SIGNATURE", signature)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -233,6 +240,7 @@ public class CoinDCXBroker implements Broker {
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CoinDCXBalance {
         private String currency;
         private double balance;
@@ -241,12 +249,16 @@ public class CoinDCXBroker implements Broker {
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CoinDCXOrderListResponse {
         private List<CoinDCXOrderInfo> orders;
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CoinDCXOrderInfo {
+        @JsonProperty("order_id")
+        @com.fasterxml.jackson.annotation.JsonAlias("id")
         private String id;
         @JsonProperty("client_order_id")
         private String clientOrderId;
@@ -255,6 +267,7 @@ public class CoinDCXBroker implements Broker {
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CoinDCXMarketDetail {
         @JsonProperty("symbol")
         private String symbol;
