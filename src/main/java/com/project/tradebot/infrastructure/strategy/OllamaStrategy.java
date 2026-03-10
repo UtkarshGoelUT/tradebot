@@ -59,7 +59,6 @@ public class OllamaStrategy implements TradingStrategy {
 
             if (response != null && response.getResponse() != null) {
                 String responseText = response.getResponse();
-                log.debug("Ollama Response: {}", responseText);
                 return parseSignals(responseText);
             }
         } catch (Exception e) {
@@ -96,7 +95,7 @@ public class OllamaStrategy implements TradingStrategy {
                 return objectMapper.readValue(jsonPart, new TypeReference<List<TradeSignal>>() {});
             }
         } catch (JsonProcessingException e) {
-            log.warn("Failed to parse Ollama response as JSON: {}. Response text: {}", e.getMessage(), text);
+            log.warn("Failed to parse Ollama response as JSON: {}", e.getMessage());
         }
         return new ArrayList<>();
     }

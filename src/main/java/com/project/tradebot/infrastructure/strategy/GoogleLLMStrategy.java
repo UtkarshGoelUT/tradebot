@@ -64,7 +64,6 @@ public class GoogleLLMStrategy implements TradingStrategy {
 
             if (response != null && response.getCandidates() != null && !response.getCandidates().isEmpty()) {
                 String responseText = response.getCandidates().get(0).getContent().getParts().get(0).getText();
-                log.debug("Google LLM Response: {}", responseText);
                 return parseSignals(responseText);
             }
         } catch (Exception e) {
@@ -100,7 +99,7 @@ public class GoogleLLMStrategy implements TradingStrategy {
                 return objectMapper.readValue(jsonPart, new TypeReference<List<TradeSignal>>() {});
             }
         } catch (JsonProcessingException e) {
-            log.warn("Failed to parse Google LLM response as JSON: {}. Response text: {}", e.getMessage(), text);
+            log.warn("Failed to parse Google LLM response as JSON: {}", e.getMessage());
         }
         return new ArrayList<>();
     }
