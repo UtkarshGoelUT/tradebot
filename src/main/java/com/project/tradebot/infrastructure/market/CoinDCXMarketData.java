@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.Collections;
 import java.util.List;
@@ -63,8 +65,12 @@ public class CoinDCXMarketData implements MarketData {
                                 (existing, replacement) -> existing
                         ));
             }
+        } catch (WebClientResponseException e) {
+            log.error("Error fetching market prices from CoinDCX. Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (WebClientException e) {
+            log.error("Error fetching market prices from CoinDCX: {}", e.getMessage());
         } catch (Exception e) {
-            log.error("Error fetching market prices from CoinDCX: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
+            log.error("Unexpected error fetching market prices from CoinDCX: {}. Message: {}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         return Collections.emptyMap();
